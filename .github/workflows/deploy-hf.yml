@@ -34,7 +34,7 @@ jobs:
       run: uv run python playground/finetune_opt.py --optimizer muon --dataset_size 50 --batch_size 2 --num_epochs 1 --run_name "ci_test"
 
     - name: Deploy to HuggingFace
-      if: github.event_name == 'push' && secrets.HF_TOKEN != ''
+      if: github.event_name == 'push'
       env:
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
       run: |
