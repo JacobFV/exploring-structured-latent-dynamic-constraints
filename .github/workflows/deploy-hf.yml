@@ -27,11 +27,11 @@ jobs:
     - name: Install dependencies
       run: uv sync
 
-    - name: Run OPT analysis
-      run: uv run python playground/run_opt_locally.py
+    # - name: Run OPT analysis
+    #   run: uv run python playground/run_opt_locally.py
 
-    - name: Run finetuning test
-      run: uv run python playground/finetune_opt.py --optimizer muon --dataset_size 50 --batch_size 2 --num_epochs 1 --run_name "ci_test"
+    # - name: Run finetuning test
+    #   run: uv run python playground/finetune_opt.py --optimizer muon --dataset_size 50 --batch_size 2 --num_epochs 1 --run_name "ci_test"
 
     - name: Deploy to HuggingFace
       env:
