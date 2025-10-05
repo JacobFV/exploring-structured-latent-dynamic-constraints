@@ -1,0 +1,16 @@
+[project]
+name = "exploring-structured-latent-dynamic-constraints"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "torch>=2.0.0",
+    "transformers>=4.30.0",
+    "numpy>=1.24.0",
+    "matplotlib>=3.7.0",
+    "seaborn>=0.12.0",
+    "pandas>=2.0.0",
+    "datasets>=2.10.0",
+    "accelerate>=0.20.0",
+]
