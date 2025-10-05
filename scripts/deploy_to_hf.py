@@ -13,7 +13,7 @@ from pathlib import Path
 # Add parent directory to path so we can import from project root
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from huggingface_hub import create_repo, HfApi
+from huggingface_hub import HfApi
 
 
 def deploy_to_huggingface():
@@ -27,25 +27,7 @@ def deploy_to_huggingface():
     repo_id = 'exploring-structured-latent-dynamic-constraints'
     api = HfApi(token=token)
 
-    # Check if repo exists first
-    try:
-        repo_info = api.repo_info(repo_id, repo_type='space')
-        print(f'Repo {repo_id} already exists as a space')
-    except Exception as e:
-        if '404' in str(e):
-            print(f'Repo {repo_id} does not exist, creating new space...')
-            try:
-                create_repo(repo_id, token=token, repo_type='space', space_sdk='gradio')
-                print('Created new HF Space')
-            except Exception as create_error:
-                if '409' in str(create_error):
-                    print(f'Repo {repo_id} exists but might not be a space - trying to use as-is')
-                else:
-                    print(f'Failed to create repo: {create_error}')
-                    return False
-        else:
-            print(f'Error checking repo: {e}')
-            return False
+    print(f'Deploying to existing HF Space: {repo_id}')
 
     # Upload essential files only
     print('Uploading essential files...')
@@ -54,7 +36,6 @@ def deploy_to_huggingface():
     project_root = Path(__file__).parent.parent
     essential_files = [
         'pyproject.toml',
-        'requirements.txt',
         'README.md'
     ]
 
