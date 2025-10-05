@@ -34,31 +34,37 @@ jobs:
       run: uv run python playground/finetune_opt.py --optimizer muon --dataset_size 50 --batch_size 2 --num_epochs 1 --run_name "ci_test"
 
     - name: Deploy to HuggingFace
-      if: github.event_name == 'push'
+      if: github.event_name == 'push' && secrets.HF_TOKEN != ''
       env:
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
       run: |
-        # Install huggingface_hub
-        uv add huggingface-hub
+        # Install huggingface_hub using uv (already in dependencies)
+        echo "Using huggingface-hub from pyproject.toml"
 
         # Create or update HF Space
         uv run python -c "
         from huggingface_hub import create_repo, upload_folder
         import os
 
+        token = os.environ.get('HF_TOKEN', '')
+        if not token:
+            print('HF_TOKEN is not set, skipping deployment')
+            exit(0)
+
         # Create repo if it doesn't exist
         try:
-            create_repo('exploring-structured-latent-dynamic-constraints', token=os.environ['HF_TOKEN'], repo_type='space', space_sdk='gradio')
+            create_repo('exploring-structured-latent-dynamic-constraints', token=token, repo_type='space', space_sdk='gradio')
+            print('Created new HF Space')
         except Exception as e:
             print(f'Repo might already exist: {e}')
 
-        # Upload files
+        # Upload files (exclude unnecessary directories)
         upload_folder(
             folder_path='.',
             repo_id='exploring-structured-latent-dynamic-constraints',
-            token=os.environ['HF_TOKEN'],
+            token=token,
             repo_type='space',
-            ignore_patterns=['.git', '.github', '__pycache__', '*.pyc', '.venv']
+            ignore_patterns=['.git', '.github', '__pycache__', '*.pyc', '.venv', 'opt_finetune_results', '*.png', '*.csv', '*.json', '*.pt']
         )
         print('Successfully deployed to HuggingFace!')
         "

@@ -325,6 +325,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "accelerate" },
     { name = "datasets" },
+    { name = "huggingface-hub" },
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "pandas" },
@@ -337,6 +338,7 @@ dependencies = [
 requires-dist = [
     { name = "accelerate", specifier = ">=0.20.0" },
     { name = "datasets", specifier = ">=2.10.0" },
+    { name = "huggingface-hub", specifier = ">=0.20.0" },
     { name = "matplotlib", specifier = ">=3.7.0" },
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "pandas", specifier = ">=2.0.0" },
