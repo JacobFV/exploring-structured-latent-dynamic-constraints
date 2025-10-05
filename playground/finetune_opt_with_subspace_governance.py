@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
 """
-OPT-125M Finetuning with Projected Latent Penalty
-================================================
+OPT-125M Finetuning with Subspace Governance and Oracle Integration
+==================================================================
 
-This script finetunes OPT-125M on a real dataset with a sophisticated penalty
-applied to post-MLP residual streams. The penalty mechanism:
+This script finetunes OPT-125M on a real dataset using a sophisticated subspace governance
+mechanism combined with multiple oracles for structured latent dynamics and constraints. Key features:
 
-1. Projects each post-MLP residual stream (12 layers) to 64 dimensions using
-   untied randomly initialized projection matrices per layer
-2. Applies Hadamard product against a fixed shared weight across all layers
-3. Computes Euclidean norm for each projected layer
-4. Weights penalties with values (0.02-0.1) that slowly increment, peak at 2/3
-   through layers (layer 8), then settle back down
+1. Projects hidden states into governed and free subspaces using learnable projection matrices
+    with a customizable k-schedule (e.g., hourglass pattern for dimensional control across layers).
+2. Integrates oracles for advanced control:
+    - Energy Oracle: Applies energy-based penalties for differentiable dynamical systems.
+    - CFG Oracle: Uses probabilistic context-free grammars for soft masking and loss regularization.
+    - Program Oracle: Enforces hard constraints via custom token-level rules.
+3. Includes anti-collapse regularizers (variance floors, log-determinant spread, radial floors)
+    and orthogonality penalties to maintain subspace integrity.
+4. Supports logit fusion from governed/free subspaces and dynamic scaling (e.g., beta for energy,
+    lambda for CFG) with warmup schedules.
+5. Uses optimizers like Muon (for spectral norm optimization) or AdamW, with full training loop,
+    evaluation, and result saving.
 
 Usage:
     python playground/finetune_opt_with_projected_latent_penalty.py --optimizer muon --dataset_size 10000
@@ -25,7 +31,20 @@ from torch.utils.data import Dataset, DataLoader, random_split
 from transformers import AutoTokenizer, AutoModelForCausalLM, get_scheduler
 import numpy as np
 import matplotlib
-matplotlib.use('Agg')  # Use non-interactive backend
+# Only use non-interactive backend if not in notebook environment
+try:
+    # Check if we're in a Jupyter notebook (including Colab)
+    shell = get_ipython().__class__.__name__
+    if shell == 'ZMQInteractiveShell':
+        # In Jupyter notebook - use default backend for inline plots
+        pass
+    else:
+        # Not in notebook - use non-interactive backend
+        matplotlib.use('Agg')
+except (NameError, AttributeError):
+    # Not in IPython environment - use non-interactive backend
+    matplotlib.use('Agg')
+
 import matplotlib.pyplot as plt
 import pandas as pd
 from typing import Dict, List, Tuple, Any, Optional, Union
@@ -517,7 +536,20 @@ class CFGOracle(nn.Module):
         B, T, k = g_seq.shape
 
         # Get terminal probabilities Phi [B, N, T]
-        Phi = self.term_head(g_seq.transpose(1, 2))  # [B, T, k] -> [B, k, T] -> [B, N, T]
+        # Apply operations step by step to handle dimension ordering correctly
+        B, T, k = g_seq.shape
+
+        # Reshape for LayerNorm: [B*T, k]
+        g_flat = g_seq.view(-1, k)  # [B*T, k]
+        g_norm = self.term_head[0](g_flat)  # LayerNorm: [B*T, k]
+
+        # Apply linear layers: [B*T, k] -> [B*T, 128]
+        g_linear = self.term_head[1](g_norm)  # Linear(k, 128)
+        g_activated = self.term_head[2](g_linear)  # GELU
+        g_output = self.term_head[3](g_activated)  # Linear(128, N)
+
+        # Reshape back to [B, N, T]
+        Phi = g_output.view(B, T, -1).transpose(1, 2)  # [B, T, N] -> [B, N, T]
         Phi = F.log_softmax(Phi, dim=1)  # Log probabilities
 
         # Convert Theta to probabilities in log space
@@ -1024,9 +1056,9 @@ class OPTFinetunerWithGovernance:
             vocab_size=vocab_size,
             nt2vocab=nt2vocab
         )
-        # Build terminal head with correct k dimension
-        mid_k = self.subgov.k_schedule[len(self.subgov.k_schedule)//2] if len(self.subgov.k_schedule) > 1 else 64
-        self.cfg_oracle.build_term_head(mid_k)
+        # Build terminal head with correct k dimension (use first layer's k for CFG)
+        first_k = self.subgov.k_schedule[0] if len(self.subgov.k_schedule) > 0 else 64
+        self.cfg_oracle.build_term_head(first_k)
 
         # Initialize program oracle
         self.program_oracle = ProgramOracle(tokenizer=self.tokenizer)
@@ -1568,5 +1600,44 @@ def main():
     print(f"\nFinetuning complete! Results saved in {config.output_dir}")
 
 
+# Colab/interactive execution - run with default config if no args provided
 if __name__ == "__main__":
-    main()
+    # Check if running in interactive mode (like Colab) or as a script
+    import sys
+
+    # Colab passes -f /path/to/kernel.json, so we need to check for this pattern
+    is_colab = (
+        len(sys.argv) == 1 or
+        (len(sys.argv) >= 2 and sys.argv[1].startswith('-f')) or
+        (len(sys.argv) == 2 and sys.argv[1] == '--f') or
+        any(arg.startswith('-f') for arg in sys.argv)
+    )
+
+    if is_colab:
+        # Running interactively - use default config
+        print("Running in interactive mode with default configuration...")
+        print("For custom configuration, use command line arguments.")
+
+        # Create default config for Colab demo
+        config = TrainingConfig(
+            optimizer_type="muon",
+            dataset_size=1000,  # Smaller for Colab demo
+            batch_size=4,       # Smaller for Colab demo
+            num_epochs=1,       # Just 1 epoch for demo
+            learning_rate=1e-4,
+            run_name="colab_demo_subspace_governance",
+            energy=EnergyConfig(enabled=True, beta=1.0),
+            cfg=CFGConfig(enabled=True, lambda_=0.1),
+            program=ProgramConfig(enabled=False),  # Disable for demo
+            govern=GovernConfig(k_max=64)  # Smaller for demo
+        )
+
+        # Run finetuning
+        finetuner = OPTFinetunerWithGovernance(config)
+        finetuner.train()
+        finetuner.plot_training_curves()
+
+        print(f"\nDemo complete! Results saved in {config.output_dir}")
+    else:
+        # Running as script with arguments
+        main()
