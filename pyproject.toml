@@ -13,4 +13,5 @@ dependencies = [
     "pandas>=2.0.0",
     "datasets>=2.10.0",
     "accelerate>=0.20.0",
+    "huggingface-hub>=0.20.0",
 ]
