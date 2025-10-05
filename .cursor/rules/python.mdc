@@ -1,0 +1,4 @@
+---
+alwaysApply: true
+---
+use uv, not raw python
