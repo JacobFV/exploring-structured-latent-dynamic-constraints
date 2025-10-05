@@ -3,6 +3,8 @@ name: Deploy to HuggingFace
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   deploy:
@@ -12,10 +14,27 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Environment
-      uses: ./.github/actions/setup-environment
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install UV
+      run: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+    - name: Install dependencies
+      run: uv sync
+
+    - name: Run OPT analysis
+      run: uv run python playground/run_opt_locally.py
+
+    - name: Run finetuning test
+      run: uv run python playground/finetune_opt.py --optimizer muon --dataset_size 50 --batch_size 2 --num_epochs 1 --run_name "ci_test"
 
     - name: Deploy to HuggingFace
+      if: github.event_name == 'push'
       env:
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
       run: |
